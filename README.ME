@@ -1,0 +1,54 @@
+2025.05.02
+Основные компоненты
+
+/cmd
+  /app            # Главная точка входа (main.go)
+/config          # Конфигурация (config.yaml, .env)
+/internal
+  /core           # Доменный слой (основные сущности, бизнес-логика)
+    /entities     # Сущности (Video, Metadata и т. д.)
+    /services     # Бизнес-логика
+  /modules        # Модули (по функционалу)
+    /analysis     # Анализ популярных видео
+    /downloader   # Скачивание видео
+    /processing   # Обработка видео (FFmpeg)
+    /audio        # Генерация аудио (Google TTS)
+    /seo          # Генерация хештегов и описаний
+    /uploader     # Загрузка видео на YouTube
+    /ads          # Вставка рекламы в видео
+  /infrastructure # Взаимодействие с внешними сервисами
+    /db           # База данных (PostgreSQL)
+    /api          # API-клиенты (YouTube, TikTok и др.)
+    /storage      # Файловая система
+    /monitoring   # Prometheus, логи
+  /interfaces     # REST API, gRPC, CLI
+/tests           # Тесты
+/deployments     # Docker, Prometheus, CI/CD
+
+
+todo: CRON, logger?, Solidity - Payment? разные темы для аккаунто, новые платформы подклчдить, настройка - акканутов - для монетизации
+
+contract
+solc --abi --bin -o output/ VideoMonetization.sol
+abigen --bin=output/VideoMonetization.bin --abi=output/VideoMonetization.abi --pkg=ads --out=VideoMonetization.go
+
+
+
+Доступ к данным pprof
+Теперь, когда ваше приложение запущено и pprof включен, вы можете получить доступ к pprof-данным через веб-браузер:
+Перейдите по адресу:
+http://localhost:8081/debug/pprof/
+Пример использования pprof:
+Просмотр активных горутин:
+http://localhost:8081/debug/pprof/goroutine?debug=2
+Создание профиля процессора:
+http://localhost:8081/debug/pprof/profile?seconds=30
+Просмотр кучи памяти:
+http://localhost:8081/debug/pprof/heap
+Просмотр всех доступных профилей:
+http://localhost:8081/debug/pprof/
+Использование инструмента go tool pprof
+Вы также можете использовать командную строку для загрузки и анализа профилей:
+sh
+go tool pprof http://localhost:8081/debug/pprof/profile?seconds=30
+Запустите команду и следуйте инструкциям, чтобы проанализировать данные.

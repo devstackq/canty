@@ -1,0 +1,5 @@
+1 fix cycle allowed
+2 choice - filePath or []byte - convert and edit video which type of format?
+push in Github
+
+use go-etherium

@@ -1,0 +1,40 @@
+app:
+  videoCategory: "your_video_category"
+  downloadPath: "path/to/download"
+  outputPath: "path/to/output"
+  adText: "Your advertisement text"
+  adImage: "path/to/ad/image"
+  maxConcurrentDownloads: 5
+  maxConcurrentUploads: 5
+  VEEDKey: "your_veed_api_key"
+
+youtube:
+  accounts:
+    - apiKey: "your_youtube_api_key"
+      username: "your_youtube_username"
+
+tiktok:
+  accounts:
+    - apiKey: "your_tiktok_api_key"
+      username: "your_tiktok_username"
+
+databases:
+  type: "postgres"  # or "mongo"
+  postgres:
+    host: "your_postgres_host"
+    port: 5432
+    user: "your_postgres_user"
+    password: "your_postgres_password"
+    dbName: "your_postgres_db_name"
+  mongo:
+    host: "your_mongo_host"
+    port: 27017
+    user: "your_mongo_user"
+    password: "your_mongo_password"
+    dbName: "your_mongo_db_name"
+
+monitoring:
+  enabled: true
+
+logging:
+  logLevel: "info"
