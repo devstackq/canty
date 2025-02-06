@@ -17,7 +17,7 @@ import (
 	"canty/internal/core/entities"
 	"canty/internal/core/services"
 	"canty/internal/infrastructures/databases"
-	"canty/internal/infrastructures/databases/mongo"
+	repoMongo "canty/internal/infrastructures/databases/mongo"
 	"canty/internal/infrastructures/databases/postgresql"
 	"canty/internal/infrastructures/monitoring"
 	"canty/internal/modules/ads"
@@ -30,6 +30,7 @@ import (
 	"canty/internal/modules/uploader"
 
 	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type VideoProcessingParams struct {
@@ -69,27 +70,31 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error creating database: %v", err)
 	}
+	defer database.Close()
+	log.Println("Database connected successfully")
 
 	// MongoDB Connection Handling
-	var mongoClient *mongo.Client
 	var videoRepo entities.VideoRepository
 	var adRepo entities.AdvertisementRepository
 
 	switch config.DBConfig.Type {
 	case "mongo":
-		mongoClient, err = database.Connect().(*mongo.Client)
+		cl, err := database.Connect()
 		if err != nil {
 			log.Fatalf("Error connecting to MongoDB: %v", err)
 		}
-		defer mongoClient.Disconnect(context.Background())
-
-		videoRepo = mongo.NewMongoVideoRepository(mongoClient, config.DBConfig.Mongo.DBName, "videos")
-		adRepo = mongo.NewMongoAdvertisementRepository(mongoClient, config.DBConfig.Mongo.DBName, "advertisements")
+		mongoClient, ok := cl.(*mongo.Client)
+		if !ok {
+			log.Fatalf("Failed to cast to *mongo.Client")
+		}
+		videoRepo = repoMongo.NewMongoVideoRepository(mongoClient, config.DBConfig.Mongo.DBName, "videos")
+		adRepo = repoMongo.NewMongoAdvertisementRepository(mongoClient, config.DBConfig.Mongo.DBName, "advertisements")
 	case "postgres":
-		pgClient, err := database.Connect().(*sql.DB)
+		psqlDB, err := database.Connect()
 		if err != nil {
 			log.Fatalf("Error connecting to PostgreSQL: %v", err)
 		}
+		pgClient := psqlDB.(*sql.DB)
 		defer pgClient.Close()
 
 		videoRepo = postgresql.NewPostgresVideoRepository(pgClient)

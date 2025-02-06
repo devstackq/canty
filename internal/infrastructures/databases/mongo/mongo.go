@@ -14,9 +14,10 @@ type Config struct {
 
 type Database struct {
 	Config Config
+	conn   *mongo.Client
 }
 
-func (mg *Database) Connect() (*mongo.Client, error) {
+func (mg *Database) Connect() (interface{}, error) {
 	clientOptions := options.Client().ApplyURI(mg.Config.URI)
 	client, err := mongo.Connect(context.Background(), clientOptions)
 	if err != nil {
@@ -26,5 +27,13 @@ func (mg *Database) Connect() (*mongo.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	mg.conn = client
 	return client, nil
+}
+
+func (db *Database) Close() error {
+	if db.conn != nil {
+		return db.conn.Disconnect(context.Background())
+	}
+	return nil
 }

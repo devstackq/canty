@@ -7,7 +7,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type PostgresConfig struct {
+type Config struct {
 	Host     string
 	Port     int
 	User     string
@@ -15,11 +15,12 @@ type PostgresConfig struct {
 	DBName   string
 }
 
-type PostgresDatabase struct {
-	Config PostgresConfig
+type Database struct {
+	Config Config
+	conn   *sql.DB
 }
 
-func (pg *PostgresDatabase) Connect() (*sql.DB, error) {
+func (pg *Database) Connect() (interface{}, error) {
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		pg.Config.Host, pg.Config.Port, pg.Config.User, pg.Config.Password, pg.Config.DBName)
 	db, err := sql.Open("postgres", dsn)
@@ -29,5 +30,14 @@ func (pg *PostgresDatabase) Connect() (*sql.DB, error) {
 	if err = db.Ping(); err != nil {
 		return nil, err
 	}
+	pg.conn = db
+
 	return db, nil
+}
+
+func (db *Database) Close() error {
+	if db.conn != nil {
+		return db.conn.Close()
+	}
+	return nil
 }

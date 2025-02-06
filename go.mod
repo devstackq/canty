@@ -5,7 +5,6 @@ go 1.23
 require (
 	cloud.google.com/go/texttospeech v1.11.0
 	github.com/ethereum/go-ethereum v1.14.13
-	github.com/gogo/protobuf v1.3.2
 	github.com/lib/pq v1.10.9
 	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/viper v1.19.0
