@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"canty/config"
-	"canty/deployment"
 	"canty/internal/core/entities"
 	"canty/internal/core/services"
 	"canty/internal/infrastructures/databases"
@@ -107,6 +106,7 @@ func main() {
 	videoService := services.NewVideoService(videoRepo)
 	adService := services.NewAdvertisementService(adRepo)
 
+	//ads monetize
 	clientURL := "your_infura_or_other_client_url"
 	contractAddress := "your_contract_address"
 
@@ -160,42 +160,42 @@ func main() {
 		Config:               config,
 	}
 
-	// Initialize deployment manager
-	services := []deployment.Service{
-		{
-			Name:       "PostgreSQL",
-			StartCmd:   "docker-compose up -d db",
-			StopCmd:    "docker-compose stop db",
-			HealthCmd:  "docker-compose exec db pg_isready",
-			RestartCmd: "docker-compose restart db",
-		},
-		{
-			Name:       "MongoDB",
-			StartCmd:   "docker-compose up -d mongo",
-			StopCmd:    "docker-compose stop mongo",
-			HealthCmd:  "docker-compose exec mongo mongo --eval 'db.runCommand({ ping: 1 })'",
-			RestartCmd: "docker-compose restart mongo",
-		},
-		{
-			Name:       "Prometheus",
-			StartCmd:   "docker-compose up -d prometheus",
-			StopCmd:    "docker-compose stop prometheus",
-			HealthCmd:  "docker-compose exec prometheus curl -f http://localhost:9090/-/healthy",
-			RestartCmd: "docker-compose restart prometheus",
-		},
-		{
-			Name:       "MyApp",
-			StartCmd:   "docker-compose up -d app",
-			StopCmd:    "docker-compose stop app",
-			HealthCmd:  "docker-compose exec app curl -f http://localhost:8080/health",
-			RestartCmd: "docker-compose restart app",
-		},
-	}
-
-	deploymentManager := deployment.NewDeploymentManager(services)
-
-	// Start services
-	deploymentManager.StartServices()
+	//// Initialize deployment manager
+	//services := []deployment.Service{
+	//	{
+	//		Name:       "PostgreSQL",
+	//		StartCmd:   "docker-compose up -d db",
+	//		StopCmd:    "docker-compose stop db",
+	//		HealthCmd:  "docker-compose exec db pg_isready",
+	//		RestartCmd: "docker-compose restart db",
+	//	},
+	//	{
+	//		Name:       "MongoDB",
+	//		StartCmd:   "docker-compose up -d mongo",
+	//		StopCmd:    "docker-compose stop mongo",
+	//		HealthCmd:  "docker-compose exec mongo mongo --eval 'db.runCommand({ ping: 1 })'",
+	//		RestartCmd: "docker-compose restart mongo",
+	//	},
+	//	{
+	//		Name:       "Prometheus",
+	//		StartCmd:   "docker-compose up -d prometheus",
+	//		StopCmd:    "docker-compose stop prometheus",
+	//		HealthCmd:  "docker-compose exec prometheus curl -f http://localhost:9090/-/healthy",
+	//		RestartCmd: "docker-compose restart prometheus",
+	//	},
+	//	{
+	//		Name:       "MyApp",
+	//		StartCmd:   "docker-compose up -d app",
+	//		StopCmd:    "docker-compose stop app",
+	//		HealthCmd:  "docker-compose exec app curl -f http://localhost:8080/health",
+	//		RestartCmd: "docker-compose restart app",
+	//	},
+	//}
+	//
+	//deploymentManager := deployment.NewDeploymentManager(services)
+	//
+	//// Start services
+	//deploymentManager.StartServices()
 
 	monitoring.StartPerformanceMonitoring()
 
