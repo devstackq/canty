@@ -13,9 +13,6 @@ import (
 	"canty/config"
 	"canty/internal/core/entities"
 	"canty/internal/core/services"
-	"canty/internal/infrastructures/databases"
-	repoMongo "canty/internal/infrastructures/databases/mongo"
-	"canty/internal/infrastructures/databases/postgresql"
 	"canty/internal/infrastructures/monitoring"
 	"canty/internal/modules/ai_video"
 	"canty/internal/modules/analysis"
@@ -25,9 +22,14 @@ import (
 	"canty/internal/modules/seo"
 	"canty/internal/modules/uploader"
 
-	"go.mongodb.org/mongo-driver/mongo"
 	"gopkg.in/yaml.v3"
 )
+
+// processedVideo используется для передачи обработанного видео с информацией о владельце (username)
+type processedVideo struct {
+	username string
+	video    *entities.Video
+}
 
 type videoProcessingParams struct {
 	analysisService *analysis.VideoAnalysisService
@@ -41,106 +43,58 @@ type videoProcessingParams struct {
 }
 
 func main() {
-
-	//Handle graceful shutdown
+	// Graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	setupGracefulShutdown(cancel)
-	// Load configuration
 
+	// Загрузка конфигурации
 	data, err := os.ReadFile("./config/config.yaml")
 	if err != nil {
 		log.Fatalf("Ошибка чтения файла: %v", err)
 	}
 
-	var config config.Config
-
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	var cfg config.Config
+	if err = yaml.Unmarshal(data, &cfg); err != nil {
 		log.Fatalf("Ошибка парсинга YAML: %v", err)
 	}
+	fmt.Printf("config: %+v\n", cfg)
 
-	fmt.Printf("config: %+v\n", config)
-
-	// Initialize database using factory
-	dbFactory := &databases.DatabaseFactory{}
-	database, err := dbFactory.CreateDatabase(config.DBConfig.Type, config)
-	if err != nil {
-		//log.Fatalf("Error creating database: %v", err)//TODO temporary for testing
-	}
-	//defer database.Close()
-	log.Println("Database connected successfully")
-
-	// MongoDB Connection Handling
-	var videoRepo entities.VideoRepository
-	//var adRepo entities.AdvertisementRepository
-
-	switch config.DBConfig.Type {
-	case "mongo":
-		cl, err := database.Connect()
-		if err != nil {
-			log.Fatalf("Error connecting to MongoDB: %v", err)
-		}
-		mongoClient, ok := cl.(*mongo.Client)
-		if !ok {
-			log.Fatalf("Failed to cast to *mongo.Client")
-		}
-		videoRepo = repoMongo.NewMongoVideoRepository(mongoClient, config.DBConfig.Mongo.DBName, "videos")
-		//adRepo = repoMongo.NewMongoAdvertisementRepository(mongoClient, config.DBConfig.Mongo.DBName, "advertisements")
-	case "postgres":
-		_, err := database.Connect()
-		if err != nil {
-			//TODO temporary for testing
-			//log.Fatalf("Error connecting to PostgreSQL: %v", err)
-		}
-		//pgClient := psqlDB.(*sql.DB)
-		//defer pgClient.Close()
-
-		videoRepo = postgresql.NewPostgresVideoRepository(nil) //todo
-		//adRepo = postgresql.NewPostgresAdvertisementRepository(nil)
-	default:
-		log.Fatalf("Unsupported database type for repositories: %+v", config.DBConfig)
-	}
-
-	log.Println("Initialize repositories successfully")
-
-	// Initialize services
-	videoService := services.NewVideoService(videoRepo)
-	//adService := services.NewAdvertisementService(adRepo)
-
-	//todo Temp, move func?
-	////ads monetize
-	//clientURL := "your_infura_or_other_client_url"
-	//contractAddress := "your_contract_address"
+	//// Инициализация базы данных через фабрику
+	//dbFactory := &databases.DatabaseFactory{}
+	//database, err := dbFactory.CreateDatabase(cfg.DBConfig.Type, cfg)
+	//if err != nil {
+	//	log.Fatalf("Error creating database: %v", err)
+	//}
+	//log.Println("Database connected successfully")
 	//
-	//adInserter, err := ads.NewSmartContractAdInserter(clientURL, contractAddress)
-	//if err != nil {
-	//	log.Fatalf("Error creating ad inserter: %v", err)
+	//var videoRepo entities.VideoRepository
+	//switch cfg.DBConfig.Type {
+	//case "mongo":
+	//	cl, err := database.Connect()
+	//	if err != nil {
+	//		log.Fatalf("Error connecting to MongoDB: %v", err)
+	//	}
+	//	mongoClient, ok := cl.(*mongo.Client)
+	//	if !ok {
+	//		log.Fatalf("Failed to cast to *mongo.Client")
+	//	}
+	//	videoRepo = repoMongo.NewMongoVideoRepository(mongoClient, cfg.DBConfig.Mongo.DBName, "videos")
+	//case "postgres":
+	//	_, err := database.Connect()
+	//	if err != nil {
+	//		log.Fatalf("Error connecting to PostgreSQL: %v", err)
+	//	}
+	//	// TODO: Реализуйте подключение к PostgreSQL
+	//	videoRepo = postgresql.NewPostgresVideoRepository(nil)
+	//default:
+	//	log.Fatalf("Unsupported database type for repositories: %+v", cfg.DBConfig)
 	//}
+	log.Println("Initialized repositories successfully")
 
-	//adText := "Your ad text"
-	//adImage := "Your ad image URL"
-	//payment := big.NewInt(1000000000000000000) // 1 ether in wei
-
-	//err = adInserter.PlaceAd(adText, adImage, payment)
-	//if err != nil {
-	//	log.Fatalf("Error placing ad: %v", err)
-	//}
-
-	// Create sample advertisement
-	//sampleAd := &entities.Advertisement{
-	//	ID:      "ad1",
-	//	Title:   config.App.AdText,
-	//	Content: config.App.AdImage,
-	//	//URL:     config.App.,
-	//}
-	//if err = adService.CreateAd(sampleAd); err != nil {
-	//	log.Fatalf("Error creating advertisement: %v", err)
-	//}
-
-	var wg sync.WaitGroup
-
-	videoUploader := uploader.NewVideoUploader(config)
-	//we get 1 account, and get most popular video 1 day, by category
-	videoAnalysisService := analysis.NewVideoAnalysisService(videoUploader.YtClients[0]) //todo config - set, how much return videos
+	// Инициализация сервисов и модулей
+	videoService := services.NewVideoService(nil)
+	videoUploader := uploader.NewVideoUploader(cfg) // внутри него создаются YClients по AccountConfig
+	videoAnalysisService := analysis.NewVideoAnalysisService(videoUploader.YClients, cfg)
 	videoDownloader := downloader.VideoDownloader{}
 	videoProcessor := processor.VideoProcessor{}
 	audioGenerator, err := audio.NewAudioGenerator(ctx)
@@ -148,7 +102,7 @@ func main() {
 		log.Fatalf("Error creating audio generator: %v", err)
 	}
 	seoGenerator := seo.SeoGenerator{}
-	videoGenerator := ai_video.NewVideoGenerator(config.App.VeedAPIKey) // Инициализация нового модуля
+	videoGenerator := ai_video.NewVideoGenerator(cfg.App.VeedAPIKey)
 
 	params := &videoProcessingParams{
 		analysisService: videoAnalysisService,
@@ -158,182 +112,111 @@ func main() {
 		seoGenerator:    seoGenerator,
 		videoService:    videoService,
 		videoGenerator:  videoGenerator,
-		config:          config,
+		config:          cfg,
 	}
 
-	//// Initialize deployment manager
-	//services := []deployment.Service{
-	//	{
-	//		Name:       "PostgreSQL",
-	//		StartCmd:   "docker-compose up -d db",
-	//		StopCmd:    "docker-compose stop db",
-	//		HealthCmd:  "docker-compose exec db pg_isready",
-	//		RestartCmd: "docker-compose restart db",
-	//	},
-	//	{
-	//		Name:       "MongoDB",
-	//		StartCmd:   "docker-compose up -d mongo",
-	//		StopCmd:    "docker-compose stop mongo",
-	//		HealthCmd:  "docker-compose exec mongo mongo --eval 'db.runCommand({ ping: 1 })'",
-	//		RestartCmd: "docker-compose restart mongo",
-	//	},
-	//	{
-	//		Name:       "Prometheus",
-	//		StartCmd:   "docker-compose up -d prometheus",
-	//		StopCmd:    "docker-compose stop prometheus",
-	//		HealthCmd:  "docker-compose exec prometheus curl -f http://localhost:9090/-/healthy",
-	//		RestartCmd: "docker-compose restart prometheus",
-	//	},
-	//	{
-	//		Name:       "MyApp",
-	//		StartCmd:   "docker-compose up -d app",
-	//		StopCmd:    "docker-compose stop app",
-	//		HealthCmd:  "docker-compose exec app curl -f http://localhost:8080/health",
-	//		RestartCmd: "docker-compose restart app",
-	//	},
-	//}
-	//
-	//deploymentManager := deployment.NewDeploymentManager(services)
-	//
-	//// Start services
-	//deploymentManager.StartServices()
-
+	// Запуск мониторинга
 	monitoring.StartPerformanceMonitoring()
-
-	// Run monitoring
 	go monitoring.StartPrometheusMetrics()
 
-	// Business logic to analyze, download, process, generate audio, SEO
-	var processedVideos []*entities.Video
+	// Обработка видео – результаты собираем в канал processedVideo
+	processedVideosCh := make(chan processedVideo, 100)
+	var wg sync.WaitGroup
+	processVideos(&wg, params, processedVideosCh)
+	go func() {
+		wg.Wait()
+		close(processedVideosCh)
+	}()
 
-	// Process YouTube and TikTok videos
-	processVideos(&wg, params, &processedVideos)
+	// Агрегация: создаём мапу username -> *entities.Video
+	processedVideosMap := make(map[string]*entities.Video)
+	for pv := range processedVideosCh {
+		processedVideosMap[pv.username] = pv.video
+	}
 
-	wg.Wait()
+	// Загрузка видео: для каждого username получаем соответствующий YouTube-клиент и загружаем видео
+	uploadVideos(videoUploader, processedVideosMap)
 
-	// Upload processed videos
-	uploadVideos(videoUploader, processedVideos)
-
-	//Shut down gracefully after successful video upload
+	// Завершаем работу приложения
 	shutDown(ctx)
 }
 
-func processVideos(wg *sync.WaitGroup, params *videoProcessingParams, processedVideos *[]*entities.Video) {
-	wg.Add(2) // Параллельная обработка для YouTube и TikTok
-	go analyzeAndProcessVideos(wg, "youtube", params, processedVideos)
-	go analyzeAndProcessVideos(wg, "tiktok", params, processedVideos)
+// processVideos запускает параллельную обработку для платформ (например, YouTube и TikTok)
+func processVideos(wg *sync.WaitGroup, params *videoProcessingParams, out chan<- processedVideo) {
+	wg.Add(2)
+	go analyzeAndProcessVideos(wg, "youtube", params, out)
+	go analyzeAndProcessVideos(wg, "tiktok", params, out)
 }
 
-func analyzeAndProcessVideos(wg *sync.WaitGroup, platform string, params *videoProcessingParams, processedVideos *[]*entities.Video) {
+// analyzeAndProcessVideos обрабатывает видео для указанной платформы.
+// Для каждого аккаунта (username) выбирается первое популярное видео и обрабатывается.
+func analyzeAndProcessVideos(wg *sync.WaitGroup, platform string, params *videoProcessingParams, out chan<- processedVideo) {
 	defer wg.Done()
 
-	popularVideos, err := params.analysisService.GetPopularVideos(platform, params.config.App.VideoCategory)
+	videosByAccount, err := params.analysisService.GetPopularVideos(platform)
 	if err != nil {
-		log.Fatalf("Error getting popular videos: %v", err)
+		log.Printf("Error getting popular videos for %s: %v", platform, err)
+		return
 	}
-	var descriptions []string
 
-	for _, video := range popularVideos {
-
-		descriptions = append(descriptions, video.Description)
-		// Download video
-		downloadedVideo, err := params.downloader.DownloadVideo(platform, video.URL, params.config.App.DownloadPath)
-		if err != nil {
-			log.Fatalf("Error downloading video: %v", err)
+	for username, videos := range videosByAccount {
+		if len(videos) == 0 {
 			continue
 		}
 
+		// Выбираем первое видео для данного аккаунта
+		video := videos[0]
+
+		// Скачивание видео
+		downloadedVideo, err := params.downloader.DownloadVideo(platform, video.URL, params.config.App.DownloadPath)
+		if err != nil {
+			log.Printf("Error downloading video for user %s: %v", username, err)
+			continue
+		}
 		video.Content = downloadedVideo.Content
 		video.FilePath = downloadedVideo.FilePath
 
-		// Generate audio
+		// Генерация аудио
 		audioText := "This is a generated audio description."
 		audioFile, err := params.audioGenerator.GenerateAudio(audioText, params.config.App.OutputPath+"/audio.mp3")
 		if err != nil {
-			log.Fatalf("Error generating audio: %v", err)
-		}
-
-		// Generate description and hashtags
-		description := params.seoGenerator.GenerateDescription(video.Description)
-		hashtags := params.seoGenerator.GenerateHashtags(video.Tags)
-
-		// Save video info in DB
-		//if err = params.videoService.SaveVideo(&video); err != nil {//TODO temp
-		//	log.Fatalf("Error creating video: %v", err)
-		//}
-
-		// Process video
-		newGeneratedVideo, err := params.processor.ProcessVideo(&video, params.config.App.OutputPath, audioText, audioFile)
-		if err != nil {
-			log.Fatalf("Error processing video: %v", err)
-		}
-
-		newGeneratedVideo.Description = description
-		newGeneratedVideo.Tags = hashtags
-		*processedVideos = append(*processedVideos, newGeneratedVideo)
-	}
-
-	// Create new videos based on descriptions
-	createVideosFromDescriptions(params.videoGenerator, params.videoService, params.config, descriptions, processedVideos)
-}
-
-func createVideosFromDescriptions(
-	videoGenerator *ai_video.VideoGenerator,
-	videoService *services.VideoService,
-	config config.Config,
-	descriptions []string,
-	processedVideos *[]*entities.Video,
-) {
-	for _, description := range descriptions {
-		outputPath := fmt.Sprintf("%s/video_%d.mp4", config.App.OutputPath, time.Now().UnixNano())
-
-		// Generate video from description
-		content, err := videoGenerator.Generate(description, outputPath)
-		if err != nil {
-			log.Fatalf("Error creating video: %v", err)
+			log.Printf("Error generating audio for user %s: %v", username, err)
 			continue
 		}
 
-		// Create new video entity
-		newVideo := &entities.Video{
-			ID:          fmt.Sprintf("video_%d", time.Now().UnixNano()),
-			Title:       "Generated Video", //add title
-			Description: description,
-			URL:         outputPath,
+		// Обработка видео (например, наложение аудио, текста и т.д.)
+		newGeneratedVideo, err := params.processor.ProcessVideo(&video, params.config.App.OutputPath, audioText, audioFile)
+		if err != nil {
+			log.Printf("Error processing video for user %s: %v", username, err)
+			continue
 		}
 
-		// Save video info in DB
-		//if err = videoService.SaveVideo(newVideo); err != nil {//TODO temp
-		//	log.Fatalf("Error saving video in DB: %v", err)
-		//	continue
-		//}
+		// Генерация описания и хэштегов
+		newGeneratedVideo.Description = params.seoGenerator.GenerateDescription(video.Description)
+		newGeneratedVideo.Tags = params.seoGenerator.GenerateHashtags(video.Tags)
 
-		newVideo.Content = content
-
-		*processedVideos = append(*processedVideos, newVideo)
+		// Отправляем результат в канал вместе с username
+		out <- processedVideo{username: username, video: newGeneratedVideo}
 	}
 }
 
-func uploadVideos(uploader *uploader.VideoUploader, processedVideos []*entities.Video) {
-
+// uploadVideos принимает мапу с видео, где ключ – username, и для каждого пользователя использует соответствующий YouTube-клиент для загрузки видео.
+func uploadVideos(uploader *uploader.VideoUploader, processedVideos map[string]*entities.Video) {
 	var wg sync.WaitGroup
-	for _, newVideo := range processedVideos {
+	for username, video := range processedVideos {
+		yClient, ok := uploader.YClients[username]
+		if !ok {
+			log.Printf("No YouTube client for username %s", username)
+			continue
+		}
 		wg.Add(1)
-		go func(video *entities.Video) {
+		go func(username string, video *entities.Video, yClient *entities.YClient) {
 			defer wg.Done()
-			description := video.Description
-			hashtags := video.Tags
-
-			// Upload video to YouTube
-			if err := uploader.UploadToYouTube(video, description, hashtags); err != nil {
+			if err := uploader.UploadToYouTube(video); err != nil {
 				log.Printf("Error uploading video to YouTube: %v", err)
 			}
 
-			//todo Upload video to TikTok
-			//if err := videoUploader.UploadVideoToTikTok(video, description, hashtags); err != nil {
-			//	log.Printf("Error uploading video to TikTok: %v", err)
-			//}
-		}(newVideo)
+		}(username, video, yClient)
 	}
 	wg.Wait()
 }

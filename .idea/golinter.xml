@@ -13,5 +13,6 @@
     </option>
     <option name="goLinterExe" value="/usr/local/bin/golangci-lint" />
     <option name="linterSelected" value="true" />
+    <option name="severity" value="Default" />
   </component>
 </project>

@@ -1,100 +1,62 @@
 package uploader
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"os"
 
 	"canty/config"
 	"canty/internal/core/entities"
 
-	"golang.org/x/net/context"
 	"google.golang.org/api/option"
 	youtube "google.golang.org/api/youtube/v3"
 )
 
+// VideoUploader отвечает за инициализацию и организацию загрузки видео
 type VideoUploader struct {
-	YtClients []*youtube.Service
-	//TkClients []*api.TikTokClient
+	YClients map[string]*entities.YClient
+	// TClients []*api.TikTokClient // если потребуется
 }
 
-func NewVideoUploader(config config.Config) *VideoUploader {
+// NewVideoUploader создает VideoUploader и инициализирует YouTube клиентов
+func NewVideoUploader(cfg config.Config) *VideoUploader {
+	ctx := context.Background()
 	return &VideoUploader{
-		YtClients: initializeYouTubeClients(config.Youtube.Accounts),
-		//TkClients: initializeTikTokClients(config.TikTok.Accounts),
+		YClients: initializeYouTubeClients(ctx, cfg.Youtube.Accounts),
+		// TClients: initializeTikTokClients(cfg.TikTok.Accounts),
 	}
 }
 
-func initializeYouTubeClients(accounts []config.AccountConfig) []*youtube.Service {
-	ytClients := make([]*youtube.Service, 0)
+// initializeYouTubeClients создает клиентов для каждого аккаунта на YouTube
+func initializeYouTubeClients(ctx context.Context, accounts []config.AccountConfig) map[string]*entities.YClient {
+	yClients := make(map[string]*entities.YClient, len(accounts))
 	for _, account := range accounts {
-		client, err := youtube.NewService(context.Background(), option.WithAPIKey(account.ApiKey))
+		client, err := youtube.NewService(ctx, option.WithAPIKey(account.ApiKey))
 		if err != nil {
-			fmt.Printf("Error creating YouTube service: %v", err)
-			return nil
+			log.Printf("Error creating YouTube service for %s: %v", account.Username, err)
+			continue
 		}
-		ytClients = append(ytClients, client)
+		yClients[account.Username] = &entities.YClient{
+			Client:   client,
+			Category: account.Category,
+			UserName: account.Username,
+		}
 	}
-	return ytClients
+	return yClients
 }
 
-//func initializeTikTokClients(accounts []config.TikTokAccount) []*api.TikTokClient {
-//	tkClients := make([]*api.TikTokClient, 0)
-//for _, account := range accounts {
-//	client, err := api.NewTikTokClient(account.AccessToken)
-//	if err != nil {
-//		log.Fatalf("Error creating TikTok client: %v", err)
-//	}
-//	tkClients = append(tkClients, client)
-//}
-//return tkClients
-//}
-
-func (vu *VideoUploader) UploadToYouTube(newVideo *entities.Video, description string, hashtags []string) error {
-	for _, ytClient := range vu.YtClients {
-		err := vu.uploadToYouTube(ytClient, newVideo, description, hashtags)
-		if err != nil {
-			return err
+// UploadToYouTube – метод высокого уровня, который для каждого нужного пользователя вызывает загрузку видео
+// Здесь происходит поиск соответствующего клиента и вызов метода UploadVideo, инкапсулированного в entities.YClient.
+func (vu *VideoUploader) UploadToYouTube(newVideo *entities.Video) error {
+	// Например, если вы хотите загрузить видео для каждого клиента, либо выбрать определенного:
+	for username, yClient := range vu.YClients {
+		// Можно добавить логику, выбирающую конкретного клиента по какому-либо критерию
+		log.Printf("Uploading video for user %s", username)
+		if err := yClient.UploadVideo(newVideo); err != nil {
+			return fmt.Errorf("failed to upload video for %s: %w", username, err)
 		}
 	}
 	return nil
 }
 
-//func (vu *VideoUploader) UploadVideoToTikTok(newVideo *entities.Video, description string, hashtags []string) error {
-//	for _, tkClient := range vu.TkClients {
-//		err := vu.uploadToTikTok(tkClient, newVideo, description, hashtags)
-//		if err != nil {
-//			return err
-//		}
-//	}
-//	return nil
-//}
-
-func (vu *VideoUploader) uploadToYouTube(ytClient *youtube.Service, video *entities.Video, description string, tags []string) error {
-	file, err := os.Open(video.FilePath)
-	if err != nil {
-		return fmt.Errorf("failed to open video file: %w", err)
-	}
-	defer file.Close()
-
-	call := ytClient.Videos.Insert([]string{"snippet", "status"}, &youtube.Video{
-		Snippet: &youtube.VideoSnippet{
-			Title:       video.Title,
-			Description: description,
-			Tags:        tags,
-		},
-		Status: &youtube.VideoStatus{PrivacyStatus: "public"},
-	})
-
-	response, err := call.Media(file).Do()
-	if err != nil {
-		return fmt.Errorf("failed to upload video: %w", err)
-	}
-	log.Printf("Video uploaded successfully: %s", response.Id)
-	return nil
-}
-
-func (vu *VideoUploader) uploadTikTokVideo(filePath, title, description string, tags []string) error {
-	// Реализуйте логику для загрузки видео на TikTok
-	return nil
-}
+// Дополнительные функции (например, для TikTok) можно добавить аналогично

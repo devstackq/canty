@@ -2,11 +2,9 @@ package analysis
 
 import (
 	"fmt"
-	"log"
 
+	"canty/config"
 	"canty/internal/core/entities"
-
-	"google.golang.org/api/youtube/v3"
 )
 
 const (
@@ -14,59 +12,75 @@ const (
 	TikTok  = "tiktok"
 )
 
+// VideoAnalysisService осуществляет анализ видео для различных платформ.
 type VideoAnalysisService struct {
-	//ytClient map[string]*youtube.Service
-	ytClient *youtube.Service
-	//tkClient *api.TikTokClient todo
+	ytClients []entities.YClient
+	// TODO: Добавить поддержку TikTok, например: tkClients *api.TikTokClient
 }
 
-func NewVideoAnalysisService(ytClient *youtube.Service) *VideoAnalysisService { //2 param tkClient *api.TikTokClient)
+// NewVideoAnalysisService создает новый экземпляр VideoAnalysisService.
+// При этом формируется срез YouTube-клиентов (YClients) на основе AccountConfig,
+// используя переданный мапу клиентов, где ключ – username.
+func NewVideoAnalysisService(ytClients map[string]*entities.YClient, cfg config.Config) *VideoAnalysisService {
+	clients := make([]entities.YClient, 0, len(cfg.Youtube.Accounts))
+	for _, account := range cfg.Youtube.Accounts {
+		if cl, ok := ytClients[account.Username]; ok {
+			clients = append(clients, entities.YClient{
+				// Если в мапе хранится готовый клиент, можно использовать его напрямую:
+				Client:   cl.Client,
+				Category: account.Category,
+				UserName: account.Username, // Используем имя пользователя, а не категорию
+			})
+		}
+	}
 	return &VideoAnalysisService{
-		ytClient: ytClient,
-		//tkClient: tkClient,
+		ytClients: clients,
 	}
 }
 
-func (vas *VideoAnalysisService) GetPopularVideos(platform string, category string) ([]entities.Video, error) {
+// GetPopularVideos возвращает популярные видео для указанной платформы.
+// Результат – мапа, где ключ – username, а значение – срез видео.
+func (vas *VideoAnalysisService) GetPopularVideos(platform string) (map[string][]entities.Video, error) {
 	switch platform {
 	case YouTube:
-		return vas.getPopularYouTubeVideos(category)
+		return vas.getPopularYouTubeVideos()
 	case TikTok:
-		//return vas.getPopularTikTokVideos(account, category)
+		// TODO: Реализовать получение популярных видео для TikTok
+		return nil, fmt.Errorf("TikTok functionality not implemented")
 	default:
-		return nil, fmt.Errorf("unsupported platform")
+		return nil, fmt.Errorf("unsupported platform: %s", platform)
 	}
-	return nil, fmt.Errorf("unsupported platform")
 }
 
-func (vas *VideoAnalysisService) getPopularYouTubeVideos(category string) ([]entities.Video, error) {
+// getPopularYouTubeVideos запрашивает у каждого YouTube-клиента список популярных видео.
+// Для каждого клиента вызывается метод API, и результаты собираются в мапу: username -> []entities.Video.
+func (vas *VideoAnalysisService) getPopularYouTubeVideos() (map[string][]entities.Video, error) {
+	result := make(map[string][]entities.Video)
 
-	call := vas.ytClient.Videos.List([]string{"snippet"}).
-		Chart("mostPopular").
-		VideoCategoryId(category).
-		MaxResults(5)
-	response, err := call.Do()
-	if err != nil {
-		log.Fatalf("Error making API call to YouTube: %v", err)
+	// Обходим всех клиентов
+	for _, ytClient := range vas.ytClients {
+		// Формируем запрос: получаем популярные видео по заданной категории
+		call := ytClient.Client.Videos.List([]string{"snippet"}).
+			Chart("mostPopular").
+			VideoCategoryId(ytClient.Category).
+			MaxResults(1) // Можно вынести в конфигурацию
+		response, err := call.Do()
+		if err != nil {
+			return nil, fmt.Errorf("error making API call to YouTube for user %s: %w", ytClient.UserName, err)
+		}
+
+		videos := make([]entities.Video, 0, len(response.Items))
+		for _, item := range response.Items {
+			videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", item.Id)
+			videos = append(videos, entities.Video{
+				Title:       item.Snippet.Title,
+				Description: item.Snippet.Description,
+				URL:         videoURL,
+				Tags:        item.Snippet.Tags,
+			})
+		}
+		result[ytClient.UserName] = videos
 	}
 
-	//todo ref
-	var video = make([]entities.Video, 0, len(response.Items))
-
-	for _, item := range response.Items {
-		videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", item.Id)
-
-		video = append(video, entities.Video{
-			Title:       item.Snippet.Title,
-			Description: item.Snippet.Description,
-			URL:         videoURL,
-			Tags:        item.Snippet.Tags,
-		})
-	}
-
-	return video, nil
+	return result, nil
 }
-
-//func (vas *VideoAnalysisService) getPopularTikTokVideos(account string, category string) ([]*TikTokVideo, error) {
-//	return fmt.Errorf("not implemented")
-//}

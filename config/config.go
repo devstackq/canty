@@ -31,6 +31,7 @@ type PlatformConfig struct {
 type AccountConfig struct {
 	ApiKey   string `yaml:"apiKey"`
 	Username string `yaml:"username"`
+	Category string `yaml:"category"`
 }
 
 type DatabaseConfig struct {

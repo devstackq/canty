@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 
 	"cloud.google.com/go/texttospeech/apiv1"
+	"google.golang.org/api/option"
 	texttospeechpb "google.golang.org/genproto/googleapis/cloud/texttospeech/v1"
 )
 
@@ -13,7 +14,7 @@ type AudioGenerator struct {
 }
 
 func NewAudioGenerator(ctx context.Context) (*AudioGenerator, error) {
-	client, err := texttospeech.NewClient(ctx)
+	client, err := texttospeech.NewClient(ctx, option.WithoutAuthentication()) //todo get API KEY?
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +27,7 @@ func (ag *AudioGenerator) GenerateAudio(text, outputPath string) ([]byte, error)
 			InputSource: &texttospeechpb.SynthesisInput_Text{Text: text},
 		},
 		Voice: &texttospeechpb.VoiceSelectionParams{
-			LanguageCode: "en-US",
+			LanguageCode: "en-US", //todo get from config
 			SsmlGender:   texttospeechpb.SsmlVoiceGender_NEUTRAL,
 		},
 		AudioConfig: &texttospeechpb.AudioConfig{
@@ -39,7 +40,7 @@ func (ag *AudioGenerator) GenerateAudio(text, outputPath string) ([]byte, error)
 		return nil, err
 	}
 
-	if err := ioutil.WriteFile(outputPath, resp.AudioContent, 0644); err != nil {
+	if err = ioutil.WriteFile(outputPath, resp.AudioContent, 0644); err != nil {
 		return nil, err
 	}
 

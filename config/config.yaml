@@ -1,5 +1,4 @@
 app:
-  videoCategory: "your_video_category"
   downloadPath: "path/to/download"
   outputPath: "path/to/output"
   adText: "Your advertisement text"
@@ -11,7 +10,8 @@ app:
 youtube:
   accounts:
     - apiKey: "your_youtube_api_key"
-      username: "your_youtube_username"
+      username: "8akebaev@gmail.com"
+      category: "car"
 
 tiktok:
   accounts:
