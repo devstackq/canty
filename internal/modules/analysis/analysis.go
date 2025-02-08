@@ -2,10 +2,14 @@ package analysis
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"time"
 
 	"canty/config"
 	"canty/internal/core/entities"
+
+	"google.golang.org/api/youtube/v3"
 )
 
 const (
@@ -81,45 +85,97 @@ func (vas *VideoAnalysisService) getPopularYouTubeVideos() (map[string][]entitie
 
 	// Обходим всех клиентов
 	for _, ytClient := range vas.ytClients {
-		// Формируем запрос: получаем популярные видео по заданной категории
+		// 1. Выполняем запрос поиска видео за последние 7 дней по заданной категории
 		searchCall := ytClient.Client.Search.List([]string{"snippet"}).
-			RegionCode("US"). //todo
+			RegionCode("US"). // можно вынести в конфигурацию
 			PublishedAfter(time.Now().Add(-7 * 24 * time.Hour).Format(time.RFC3339)).
 			VideoCategoryId(ytClient.Category).
 			Type("video").
-			MaxResults(1) //todo
-
+			MaxResults(1)
 		searchResponse, err := searchCall.Do()
 		if err != nil {
-			return nil, err
+			log.Printf("Ошибка при вызове Search.list для пользователя %s: %v", ytClient.UserName, err)
+			continue
+		}
+		if len(searchResponse.Items) == 0 {
+			log.Printf("Нет видео для пользователя %s", ytClient.UserName)
+			continue
 		}
 
-		// Собираем все ID видео
-		var videoIDs []string
-		for _, item := range searchResponse.Items {
-			videoIDs = append(videoIDs, item.Id.VideoId)
-		}
+		var videos = make([]entities.Video, 0, len(searchResponse.Items)) //todo - now we get 1 video
 
-		// Запрашиваем полную информацию о видео, включая теги, через Videos.list
-		videosCall := ytClient.Client.Videos.List([]string{"snippet"}).
-			Id(videoIDs...)
+		// Из результатов получаем идентификатор видео
+		searchItem := searchResponse.Items[0]
+		videoID := searchItem.Id.VideoId
+
+		// 2. Получаем подробную информацию о видео (включая теги) через Videos.list
+		videosCall := ytClient.Client.Videos.List([]string{"snippet"}).Id(videoID)
 		videosResponse, err := videosCall.Do()
 		if err != nil {
-			return nil, err
+			log.Printf("Ошибка при вызове Videos.list для видео %s: %v", videoID, err)
+			continue
 		}
-		videos := make([]entities.Video, 0, len(videosResponse.Items))
-
-		// Обрабатываем полученные видео, включая теги
-		for _, item := range videosResponse.Items {
-
-			videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", item.Id)
-			videos = append(videos, entities.Video{
-				Title:       item.Snippet.Title,       //todo generate new title by chatGPT?
-				Description: item.Snippet.Description, //todo generate new Description by chatGPT?
-				URL:         videoURL,
-				Tags:        item.Snippet.Tags,
-			})
+		if len(videosResponse.Items) == 0 {
+			log.Printf("Нет подробной информации для видео %s", videoID)
+			continue
 		}
+		videoDetails := videosResponse.Items[0]
+
+		// 3. Пытаемся получить субтитры для видео через Captions.list
+		var subtitles string
+		captionsCall := ytClient.Client.Captions.List([]string{"snippet"}, videoID)
+		captionsResponse, err := captionsCall.Do()
+		if err != nil {
+			log.Printf("Ошибка запроса субтитров для видео %s: %v", videoID, err)
+			continue
+		}
+
+		if len(captionsResponse.Items) > 0 {
+			// Выбираем дорожку, предпочтительно на английском языке
+			var chosenCaption *youtube.Caption
+			for _, caption := range captionsResponse.Items {
+				if caption.Snippet.Language == "en" { // язык можно вынести в конфигурацию
+					chosenCaption = caption
+					break
+				}
+			}
+			if chosenCaption == nil {
+				// Если нет английской дорожки, берем первую доступную
+				chosenCaption = captionsResponse.Items[0]
+			}
+
+			// 4. Загружаем субтитры с выбранной дорожки в формате SRT
+			downloadCall := ytClient.Client.Captions.Download(chosenCaption.Id).Tfmt("srt")
+			resp, err := downloadCall.Download()
+			if err != nil {
+				log.Printf("Ошибка загрузки субтитров для caption %s: %v", chosenCaption.Id, err)
+				continue
+			}
+			defer resp.Body.Close()
+
+			data, err := io.ReadAll(resp.Body)
+			if err != nil {
+				log.Printf("Ошибка чтения субтитров для caption %s: %v", chosenCaption.Id, err)
+				continue
+			}
+
+			subtitles = string(data)
+		}
+
+		// Формируем URL видео
+		videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
+
+		// Собираем объект Video с тегами и субтитрами
+		video := entities.Video{
+			Title:       videoDetails.Snippet.Title,       // можно дополнительно генерировать новый заголовок
+			Description: videoDetails.Snippet.Description, // можно дополнительно генерировать новое описание
+			URL:         videoURL,
+			Tags:        videoDetails.Snippet.Tags, // теги из подробной информации
+			Subtitles:   subtitles,
+		}
+
+		videos = append(videos, video)
+
 		result[ytClient.UserName] = videos
 	}
 

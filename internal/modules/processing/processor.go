@@ -25,21 +25,25 @@ func (vp *VideoProcessor) ProcessVideo(video *entities.Video, outputPath, text s
 		// Удаляем временный файл после завершения работы.
 		defer os.Remove(tmpVideoFile.Name())
 
-		if err := os.WriteFile(tmpVideoFile.Name(), video.Content, 0644); err != nil {
+		if err = os.WriteFile(tmpVideoFile.Name(), video.Content, 0644); err != nil {
 			return video, fmt.Errorf("failed to write video content: %w", err)
 		}
 		video.FilePath = tmpVideoFile.Name()
 	}
+	var audioFilePath string
 
-	// Сохраняем аудио во временный файл.
-	tmpAudioFile, err := os.CreateTemp("", "temp-audio-*.mp3")
-	if err != nil {
-		return video, fmt.Errorf("failed to create temp audio file: %w", err)
-	}
-	defer os.Remove(tmpAudioFile.Name())
+	if audioContent != nil {
+		// Сохраняем аудио во временный файл.
+		tmpAudioFile, err := os.CreateTemp("", "temp-audio-*.mp3")
+		if err != nil {
+			return video, fmt.Errorf("failed to create temp audio file: %w", err)
+		}
+		defer os.Remove(tmpAudioFile.Name())
 
-	if err := os.WriteFile(tmpAudioFile.Name(), audioContent, 0644); err != nil {
-		return video, fmt.Errorf("failed to write audio content: %w", err)
+		if err = os.WriteFile(tmpAudioFile.Name(), audioContent, 0644); err != nil {
+			return video, fmt.Errorf("failed to write audio content: %w", err)
+		}
+		audioFilePath = tmpAudioFile.Name()
 	}
 
 	// Создаем временный файл для видео с добавленным текстом.
@@ -64,7 +68,7 @@ func (vp *VideoProcessor) ProcessVideo(video *entities.Video, outputPath, text s
 	// Добавляем аудио к видео.
 	ffmpegArgsAudio := []string{
 		"-i", tmpTextVideoFile.Name(),
-		"-i", tmpAudioFile.Name(),
+		"-i", audioFilePath,
 		"-c:v", "copy",
 		"-c:a", "aac",
 		"-y", // автоматическая перезапись выходного файла

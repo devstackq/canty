@@ -179,15 +179,17 @@ func analyzeAndProcessVideos(wg *sync.WaitGroup, platform string, params *videoP
 		video.FilePath = downloadedVideo.FilePath
 
 		// Генерация аудио
-		audioText := "This is a generated audio description."
-		audioFile, err := params.audioGenerator.GenerateAudio(context.Background(), audioText, params.config.App.OutputPath+"/audio.mp3")
-		if err != nil {
-			log.Printf("Error generating audio for user %s: %v", username, err)
-			continue
+		var audioBt []byte
+
+		if video.Subtitles != "" {
+			audioBt, err = params.audioGenerator.GenerateAudio(context.Background(), video.Subtitles, params.config.App.OutputPath+"/audio.mp3")
+			if err != nil {
+				log.Printf("Error generating audio for user %s: %v", username, err)
+			}
 		}
 
 		// Обработка видео (например, наложение аудио, текста и т.д.)
-		newGeneratedVideo, err := params.processor.ProcessVideo(&video, params.config.App.OutputPath, audioText, audioFile)
+		newGeneratedVideo, err := params.processor.ProcessVideo(&video, params.config.App.OutputPath, video.Subtitles, audioBt)
 		if err != nil {
 			log.Printf("Error processing video for user %s: %v", username, err)
 			continue
