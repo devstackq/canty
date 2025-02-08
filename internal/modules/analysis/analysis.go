@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"fmt"
+	"time"
 
 	"canty/config"
 	"canty/internal/core/entities"
@@ -52,6 +53,27 @@ func (vas *VideoAnalysisService) GetPopularVideos(platform string) (map[string][
 	}
 }
 
+/*
+Film & Animation – ID: 1
+Autos & Vehicles – ID: 2
+Music – ID: 10
+Pets & Animals – ID: 15
+Sports – ID: 17
+Short Movies – ID: 18
+Travel & Events – ID: 19
+Gaming – ID: 20
+People & Blogs – ID: 22
+Comedy – ID: 23
+Entertainment – ID: 24
+News & Politics – ID: 25
+Howto & Style – ID: 26
+Education – ID: 27
+Science & Technology – ID: 28
+Nonprofits & Activism – ID: 29
+Movies – ID: 30
+Anime/Animation – ID: 31
+*/
+
 // getPopularYouTubeVideos запрашивает у каждого YouTube-клиента список популярных видео.
 // Для каждого клиента вызывается метод API, и результаты собираются в мапу: username -> []entities.Video.
 func (vas *VideoAnalysisService) getPopularYouTubeVideos() (map[string][]entities.Video, error) {
@@ -60,21 +82,40 @@ func (vas *VideoAnalysisService) getPopularYouTubeVideos() (map[string][]entitie
 	// Обходим всех клиентов
 	for _, ytClient := range vas.ytClients {
 		// Формируем запрос: получаем популярные видео по заданной категории
-		call := ytClient.Client.Videos.List([]string{"snippet"}).
-			Chart("mostPopular").
+		searchCall := ytClient.Client.Search.List([]string{"snippet"}).
+			RegionCode("US"). //todo
+			PublishedAfter(time.Now().Add(-7 * 24 * time.Hour).Format(time.RFC3339)).
 			VideoCategoryId(ytClient.Category).
-			MaxResults(1) // Можно вынести в конфигурацию
-		response, err := call.Do()
+			Type("video").
+			MaxResults(1) //todo
+
+		searchResponse, err := searchCall.Do()
 		if err != nil {
-			return nil, fmt.Errorf("error making API call to YouTube for user %s: %w", ytClient.UserName, err)
+			return nil, err
 		}
 
-		videos := make([]entities.Video, 0, len(response.Items))
-		for _, item := range response.Items {
+		// Собираем все ID видео
+		var videoIDs []string
+		for _, item := range searchResponse.Items {
+			videoIDs = append(videoIDs, item.Id.VideoId)
+		}
+
+		// Запрашиваем полную информацию о видео, включая теги, через Videos.list
+		videosCall := ytClient.Client.Videos.List([]string{"snippet"}).
+			Id(videoIDs...)
+		videosResponse, err := videosCall.Do()
+		if err != nil {
+			return nil, err
+		}
+		videos := make([]entities.Video, 0, len(videosResponse.Items))
+
+		// Обрабатываем полученные видео, включая теги
+		for _, item := range videosResponse.Items {
+
 			videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", item.Id)
 			videos = append(videos, entities.Video{
-				Title:       item.Snippet.Title,
-				Description: item.Snippet.Description,
+				Title:       item.Snippet.Title,       //todo generate new title by chatGPT?
+				Description: item.Snippet.Description, //todo generate new Description by chatGPT?
 				URL:         videoURL,
 				Tags:        item.Snippet.Tags,
 			})

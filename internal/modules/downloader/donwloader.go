@@ -38,6 +38,8 @@ func (vd *VideoDownloader) DownloadVideo(platform, url string, outputPath string
 }
 
 func (vd *VideoDownloader) downloadYouTubeVideo(videoURL string, outputPath string) (entities.Video, error) {
+	os.Setenv("PATH", "/opt/homebrew/bin:"+os.Getenv("PATH")) //todo need?
+
 	// Создаем временный файл для скачивания видео.
 	tmpFile, err := os.CreateTemp("", "video-*.mp4")
 	if err != nil {
@@ -48,7 +50,7 @@ func (vd *VideoDownloader) downloadYouTubeVideo(videoURL string, outputPath stri
 	tmpFile.Close()
 
 	// Выполняем команду youtube-dl для скачивания видео.
-	cmd := exec.Command("youtube-dl", "-o", fileName, videoURL)
+	cmd := exec.Command("/opt/homebrew/bin/yt-dlp", "-o", fileName, videoURL)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return entities.Video{}, fmt.Errorf("не удалось скачать видео: %w, вывод: %s", err, output)

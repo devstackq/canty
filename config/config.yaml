@@ -9,9 +9,9 @@ app:
 
 youtube:
   accounts:
-    - apiKey: "your_youtube_api_key"
+    - apiKey: "AIzaSyBi7MDau60JVC6qaKSrvLUR244UVlIuujs"
       username: "8akebaev@gmail.com"
-      category: "car"
+      category: "20"
 
 tiktok:
   accounts:

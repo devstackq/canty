@@ -159,6 +159,8 @@ func analyzeAndProcessVideos(wg *sync.WaitGroup, platform string, params *videoP
 		return
 	}
 
+	fmt.Println("GetPopularVideos count", len(videosByAccount))
+
 	for username, videos := range videosByAccount {
 		if len(videos) == 0 {
 			continue
