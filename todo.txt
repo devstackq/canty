@@ -1,8 +1,5 @@
-1 fix cycle allowed +
-RUN without Docker & DB? for test
-
-2 choice - filePath or []byte - convert and edit video which type of format?
-
 3 use go-etherium
 4 check code, optimize DRY, Kiss
-todo: CRON, logger?, Solidity - Payment? разные темы для аккаунто, новые платформы подклчдить, настройка - акканутов - для монетизации
+
+TODO: CRON, logger?, Solidity - Payment?
+TODO2: разные темы для аккаунто, новые платформы подклчдить, настройка - акканутов - для монетизации

@@ -2,7 +2,6 @@ package processor
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 
@@ -16,62 +15,76 @@ import (
 type VideoProcessor struct{}
 
 func (vp *VideoProcessor) ProcessVideo(video *entities.Video, outputPath, text string, audioContent []byte) (*entities.Video, error) {
-	// Если видео содержится в []byte
+
+	// Если видео содержится в []byte, сохраняем его во временный файл.
 	if len(video.Content) > 0 {
-		// Временное сохранение видео в файл для обработки
-		tempFile, err := ioutil.TempFile("", "temp-video-*.mp4")
+		tmpVideoFile, err := os.CreateTemp("", "temp-video-*.mp4")
 		if err != nil {
-			return nil, fmt.Errorf("failed to create temp file: %w", err)
+			return video, fmt.Errorf("failed to create temp video file: %w", err)
 		}
-		defer os.Remove(tempFile.Name())
+		// Удаляем временный файл после завершения работы.
+		defer os.Remove(tmpVideoFile.Name())
 
-		_, err = tempFile.Write(video.Content)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write to temp file: %w", err)
+		if err := os.WriteFile(tmpVideoFile.Name(), video.Content, 0644); err != nil {
+			return video, fmt.Errorf("failed to write video content: %w", err)
 		}
-		err = tempFile.Close()
-		if err != nil {
-			return nil, fmt.Errorf("failed to close temp file: %w", err)
-		}
-
-		video.FilePath = tempFile.Name()
+		video.FilePath = tmpVideoFile.Name()
 	}
 
-	// Временное сохранение аудио в файл для обработки
-	audioTempFile, err := ioutil.TempFile("", "temp-audio-*.mp3")
+	// Сохраняем аудио во временный файл.
+	tmpAudioFile, err := os.CreateTemp("", "temp-audio-*.mp3")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temp audio file: %w", err)
+		return video, fmt.Errorf("failed to create temp audio file: %w", err)
 	}
-	defer os.Remove(audioTempFile.Name())
+	defer os.Remove(tmpAudioFile.Name())
 
-	_, err = audioTempFile.Write(audioContent)
+	if err := os.WriteFile(tmpAudioFile.Name(), audioContent, 0644); err != nil {
+		return video, fmt.Errorf("failed to write audio content: %w", err)
+	}
+
+	// Создаем временный файл для видео с добавленным текстом.
+	tmpTextVideoFile, err := os.CreateTemp("", "temp-text-video-*.mp4")
 	if err != nil {
-		return nil, fmt.Errorf("failed to write to temp audio file: %w", err)
+		return video, fmt.Errorf("failed to create temp text video file: %w", err)
 	}
-	err = audioTempFile.Close()
-	if err != nil {
-		return nil, fmt.Errorf("failed to close temp audio file: %w", err)
+	defer os.Remove(tmpTextVideoFile.Name())
+
+	// Добавляем текст к видео с помощью ffmpeg.
+	ffmpegArgsText := []string{
+		"-i", video.FilePath,
+		"-vf", fmt.Sprintf("drawtext=text='%s':fontcolor=white:fontsize=24", text),
+		"-y", // автоматическая перезапись выходного файла
+		tmpTextVideoFile.Name(),
+	}
+	cmd := exec.Command("ffmpeg", ffmpegArgsText...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return video, fmt.Errorf("failed to add text to video: %w, output: %s", err, output)
 	}
 
-	// Добавление текста к видео
-	textTempFile, err := ioutil.TempFile("", "temp-text-video-*.mp4")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp text video file: %w", err)
+	// Добавляем аудио к видео.
+	ffmpegArgsAudio := []string{
+		"-i", tmpTextVideoFile.Name(),
+		"-i", tmpAudioFile.Name(),
+		"-c:v", "copy",
+		"-c:a", "aac",
+		"-y", // автоматическая перезапись выходного файла
+		outputPath,
 	}
-	defer os.Remove(textTempFile.Name())
-
-	cmd := exec.Command("ffmpeg", "-i", video.FilePath, "-vf", fmt.Sprintf("drawtext=text='%s'", text), textTempFile.Name())
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to add text to video: %w", err)
-	}
-
-	// Добавление аудио к видео
-	cmd = exec.Command("ffmpeg", "-i", textTempFile.Name(), "-i", audioTempFile.Name(), "-c:v", "copy", "-c:a", "aac", outputPath)
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to add audio to video: %w", err)
+	cmd = exec.Command("ffmpeg", ffmpegArgsAudio...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return video, fmt.Errorf("failed to add audio to video: %w, output: %s", err, output)
 	}
 
-	// Обновление пути к обработанному видео
+	// Обновляем путь к итоговому видео.
 	video.FilePath = outputPath
+
+	// Читаем финальный обработанный видеофайл и обновляем video.Content.
+	processedContent, err := os.ReadFile(outputPath)
+	if err != nil {
+		return video, fmt.Errorf("failed to read processed video file: %w", err)
+	}
+	video.Content = processedContent
+
 	return video, nil
+
 }

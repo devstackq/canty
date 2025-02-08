@@ -1,12 +1,11 @@
 package config
 
 type Config struct {
-	App     AppConfig      `yaml:"app"`
-	Youtube PlatformConfig `yaml:"youtube"`
-	Tiktok  PlatformConfig `yaml:"tiktok"`
-	//Database   DatabaseConfig   `yaml:"databases"`
+	App        AppConfig        `yaml:"app"`
+	Youtube    PlatformConfig   `yaml:"youtube"`
+	Tiktok     PlatformConfig   `yaml:"tiktok"`
 	Monitoring MonitoringConfig `yaml:"monitoring"`
-	DBConfig   DB               `yaml:"databases"`
+	DBConfig   DBConfig         `yaml:"databases"`
 	Logging    LoggingConfig    `yaml:"logging"`
 }
 
@@ -43,10 +42,11 @@ type DatabaseConfig struct {
 }
 
 type MonitoringConfig struct {
-	Enabled bool
+	Enabled bool `yaml:"enabled"`
 }
-type DB struct {
-	Type     string
-	Postgres DatabaseConfig
-	Mongo    DatabaseConfig
+
+type DBConfig struct {
+	Type     string         `yaml:"type"`
+	Postgres DatabaseConfig `yaml:"postgres"`
+	Mongo    DatabaseConfig `yaml:"mongo"`
 }

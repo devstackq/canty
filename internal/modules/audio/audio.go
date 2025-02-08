@@ -12,8 +12,8 @@ type AudioGenerator struct {
 	ttsClient *texttospeech.Client
 }
 
-func NewAudioGenerator() (*AudioGenerator, error) {
-	client, err := texttospeech.NewClient(context.Background())
+func NewAudioGenerator(ctx context.Context) (*AudioGenerator, error) {
+	client, err := texttospeech.NewClient(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
-	"math/big"
 	"os"
 	"os/signal"
 	"sync"
@@ -19,7 +17,6 @@ import (
 	repoMongo "canty/internal/infrastructures/databases/mongo"
 	"canty/internal/infrastructures/databases/postgresql"
 	"canty/internal/infrastructures/monitoring"
-	"canty/internal/modules/ads"
 	"canty/internal/modules/ai_video"
 	"canty/internal/modules/analysis"
 	"canty/internal/modules/audio"
@@ -28,19 +25,19 @@ import (
 	"canty/internal/modules/seo"
 	"canty/internal/modules/uploader"
 
-	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
+	"gopkg.in/yaml.v3"
 )
 
-type VideoProcessingParams struct {
-	VideoAnalysisService *analysis.VideoAnalysisService
-	VideoDownloader      downloader.VideoDownloader
-	VideoProcessor       processor.VideoProcessor
-	AudioGenerator       *audio.AudioGenerator
-	SeoGenerator         seo.SeoGenerator
-	VideoService         *services.VideoService
-	VideoGenerator       *ai_video.VideoGenerator
-	Config               config.Config
+type videoProcessingParams struct {
+	analysisService *analysis.VideoAnalysisService
+	downloader      downloader.VideoDownloader
+	processor       processor.VideoProcessor
+	audioGenerator  *audio.AudioGenerator
+	seoGenerator    seo.SeoGenerator
+	videoService    *services.VideoService
+	videoGenerator  *ai_video.VideoGenerator
+	config          config.Config
 }
 
 func main() {
@@ -49,32 +46,32 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	setupGracefulShutdown(cancel)
 	// Load configuration
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath("./config")
 
-	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Error loading config file: %v", err)
+	data, err := os.ReadFile("./config/config.yaml")
+	if err != nil {
+		log.Fatalf("Ошибка чтения файла: %v", err)
 	}
 
 	var config config.Config
 
-	if err := viper.Unmarshal(&config); err != nil {
-		log.Fatalf("Error unmarshalling config: %v", err)
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		log.Fatalf("Ошибка парсинга YAML: %v", err)
 	}
+
+	fmt.Printf("config: %+v\n", config)
 
 	// Initialize database using factory
 	dbFactory := &databases.DatabaseFactory{}
 	database, err := dbFactory.CreateDatabase(config.DBConfig.Type, config)
 	if err != nil {
-		log.Fatalf("Error creating database: %v", err)
+		//log.Fatalf("Error creating database: %v", err)//TODO temporary for testing
 	}
-	defer database.Close()
+	//defer database.Close()
 	log.Println("Database connected successfully")
 
 	// MongoDB Connection Handling
 	var videoRepo entities.VideoRepository
-	var adRepo entities.AdvertisementRepository
+	//var adRepo entities.AdvertisementRepository
 
 	switch config.DBConfig.Type {
 	case "mongo":
@@ -87,53 +84,57 @@ func main() {
 			log.Fatalf("Failed to cast to *mongo.Client")
 		}
 		videoRepo = repoMongo.NewMongoVideoRepository(mongoClient, config.DBConfig.Mongo.DBName, "videos")
-		adRepo = repoMongo.NewMongoAdvertisementRepository(mongoClient, config.DBConfig.Mongo.DBName, "advertisements")
+		//adRepo = repoMongo.NewMongoAdvertisementRepository(mongoClient, config.DBConfig.Mongo.DBName, "advertisements")
 	case "postgres":
-		psqlDB, err := database.Connect()
+		_, err := database.Connect()
 		if err != nil {
-			log.Fatalf("Error connecting to PostgreSQL: %v", err)
+			//TODO temporary for testing
+			//log.Fatalf("Error connecting to PostgreSQL: %v", err)
 		}
-		pgClient := psqlDB.(*sql.DB)
-		defer pgClient.Close()
+		//pgClient := psqlDB.(*sql.DB)
+		//defer pgClient.Close()
 
-		videoRepo = postgresql.NewPostgresVideoRepository(pgClient)
-		adRepo = postgresql.NewPostgresAdvertisementRepository(pgClient)
+		videoRepo = postgresql.NewPostgresVideoRepository(nil) //todo
+		//adRepo = postgresql.NewPostgresAdvertisementRepository(nil)
 	default:
-		log.Fatalf("Unsupported database type for repositories")
+		log.Fatalf("Unsupported database type for repositories: %+v", config.DBConfig)
 	}
+
+	log.Println("Initialize repositories successfully")
 
 	// Initialize services
 	videoService := services.NewVideoService(videoRepo)
-	adService := services.NewAdvertisementService(adRepo)
+	//adService := services.NewAdvertisementService(adRepo)
 
-	//ads monetize
-	clientURL := "your_infura_or_other_client_url"
-	contractAddress := "your_contract_address"
+	//todo Temp, move func?
+	////ads monetize
+	//clientURL := "your_infura_or_other_client_url"
+	//contractAddress := "your_contract_address"
+	//
+	//adInserter, err := ads.NewSmartContractAdInserter(clientURL, contractAddress)
+	//if err != nil {
+	//	log.Fatalf("Error creating ad inserter: %v", err)
+	//}
 
-	adInserter, err := ads.NewSmartContractAdInserter(clientURL, contractAddress)
-	if err != nil {
-		log.Fatalf("Error creating ad inserter: %v", err)
-	}
+	//adText := "Your ad text"
+	//adImage := "Your ad image URL"
+	//payment := big.NewInt(1000000000000000000) // 1 ether in wei
 
-	adText := "Your ad text"
-	adImage := "Your ad image URL"
-	payment := big.NewInt(1000000000000000000) // 1 ether in wei
-
-	err = adInserter.PlaceAd(adText, adImage, payment)
-	if err != nil {
-		log.Fatalf("Error placing ad: %v", err)
-	}
+	//err = adInserter.PlaceAd(adText, adImage, payment)
+	//if err != nil {
+	//	log.Fatalf("Error placing ad: %v", err)
+	//}
 
 	// Create sample advertisement
-	sampleAd := &entities.Advertisement{
-		ID:      "ad1",
-		Title:   config.App.AdText,
-		Content: config.App.AdImage,
-		//URL:     config.App.,
-	}
-	if err = adService.CreateAd(sampleAd); err != nil {
-		log.Fatalf("Error creating advertisement: %v", err)
-	}
+	//sampleAd := &entities.Advertisement{
+	//	ID:      "ad1",
+	//	Title:   config.App.AdText,
+	//	Content: config.App.AdImage,
+	//	//URL:     config.App.,
+	//}
+	//if err = adService.CreateAd(sampleAd); err != nil {
+	//	log.Fatalf("Error creating advertisement: %v", err)
+	//}
 
 	var wg sync.WaitGroup
 
@@ -142,22 +143,22 @@ func main() {
 	videoAnalysisService := analysis.NewVideoAnalysisService(videoUploader.YtClients[0]) //todo config - set, how much return videos
 	videoDownloader := downloader.VideoDownloader{}
 	videoProcessor := processor.VideoProcessor{}
-	audioGenerator, err := audio.NewAudioGenerator()
+	audioGenerator, err := audio.NewAudioGenerator(ctx)
 	if err != nil {
 		log.Fatalf("Error creating audio generator: %v", err)
 	}
 	seoGenerator := seo.SeoGenerator{}
 	videoGenerator := ai_video.NewVideoGenerator(config.App.VeedAPIKey) // Инициализация нового модуля
 
-	videoProcessingParams := &VideoProcessingParams{
-		VideoAnalysisService: videoAnalysisService,
-		VideoDownloader:      videoDownloader,
-		VideoProcessor:       videoProcessor,
-		AudioGenerator:       audioGenerator,
-		SeoGenerator:         seoGenerator,
-		VideoService:         videoService,
-		VideoGenerator:       videoGenerator,
-		Config:               config,
+	params := &videoProcessingParams{
+		analysisService: videoAnalysisService,
+		downloader:      videoDownloader,
+		processor:       videoProcessor,
+		audioGenerator:  audioGenerator,
+		seoGenerator:    seoGenerator,
+		videoService:    videoService,
+		videoGenerator:  videoGenerator,
+		config:          config,
 	}
 
 	//// Initialize deployment manager
@@ -206,7 +207,7 @@ func main() {
 	var processedVideos []*entities.Video
 
 	// Process YouTube and TikTok videos
-	processVideos(&wg, videoProcessingParams, &processedVideos)
+	processVideos(&wg, params, &processedVideos)
 
 	wg.Wait()
 
@@ -217,16 +218,16 @@ func main() {
 	shutDown(ctx)
 }
 
-func processVideos(wg *sync.WaitGroup, params *VideoProcessingParams, processedVideos *[]*entities.Video) {
+func processVideos(wg *sync.WaitGroup, params *videoProcessingParams, processedVideos *[]*entities.Video) {
 	wg.Add(2) // Параллельная обработка для YouTube и TikTok
 	go analyzeAndProcessVideos(wg, "youtube", params, processedVideos)
 	go analyzeAndProcessVideos(wg, "tiktok", params, processedVideos)
 }
 
-func analyzeAndProcessVideos(wg *sync.WaitGroup, platform string, params *VideoProcessingParams, processedVideos *[]*entities.Video) {
+func analyzeAndProcessVideos(wg *sync.WaitGroup, platform string, params *videoProcessingParams, processedVideos *[]*entities.Video) {
 	defer wg.Done()
 
-	popularVideos, err := params.VideoAnalysisService.GetPopularVideos(platform, params.Config.App.VideoCategory)
+	popularVideos, err := params.analysisService.GetPopularVideos(platform, params.config.App.VideoCategory)
 	if err != nil {
 		log.Fatalf("Error getting popular videos: %v", err)
 	}
@@ -236,7 +237,7 @@ func analyzeAndProcessVideos(wg *sync.WaitGroup, platform string, params *VideoP
 
 		descriptions = append(descriptions, video.Description)
 		// Download video
-		downloadedVideo, err := params.VideoDownloader.DownloadVideo(platform, video.URL, params.Config.App.DownloadPath)
+		downloadedVideo, err := params.downloader.DownloadVideo(platform, video.URL, params.config.App.DownloadPath)
 		if err != nil {
 			log.Fatalf("Error downloading video: %v", err)
 			continue
@@ -247,22 +248,22 @@ func analyzeAndProcessVideos(wg *sync.WaitGroup, platform string, params *VideoP
 
 		// Generate audio
 		audioText := "This is a generated audio description."
-		audioFile, err := params.AudioGenerator.GenerateAudio(audioText, params.Config.App.OutputPath+"/audio.mp3")
+		audioFile, err := params.audioGenerator.GenerateAudio(audioText, params.config.App.OutputPath+"/audio.mp3")
 		if err != nil {
 			log.Fatalf("Error generating audio: %v", err)
 		}
 
 		// Generate description and hashtags
-		description := params.SeoGenerator.GenerateDescription(video.Description)
-		hashtags := params.SeoGenerator.GenerateHashtags(video.Tags)
+		description := params.seoGenerator.GenerateDescription(video.Description)
+		hashtags := params.seoGenerator.GenerateHashtags(video.Tags)
 
 		// Save video info in DB
-		if err = params.VideoService.CreateVideo(&video); err != nil {
-			log.Fatalf("Error creating video: %v", err)
-		}
+		//if err = params.videoService.SaveVideo(&video); err != nil {//TODO temp
+		//	log.Fatalf("Error creating video: %v", err)
+		//}
 
 		// Process video
-		newGeneratedVideo, err := params.VideoProcessor.ProcessVideo(&video, params.Config.App.OutputPath, audioText, audioFile)
+		newGeneratedVideo, err := params.processor.ProcessVideo(&video, params.config.App.OutputPath, audioText, audioFile)
 		if err != nil {
 			log.Fatalf("Error processing video: %v", err)
 		}
@@ -273,7 +274,7 @@ func analyzeAndProcessVideos(wg *sync.WaitGroup, platform string, params *VideoP
 	}
 
 	// Create new videos based on descriptions
-	createVideosFromDescriptions(params.VideoGenerator, params.VideoService, params.Config, descriptions, processedVideos)
+	createVideosFromDescriptions(params.videoGenerator, params.videoService, params.config, descriptions, processedVideos)
 }
 
 func createVideosFromDescriptions(
@@ -302,10 +303,10 @@ func createVideosFromDescriptions(
 		}
 
 		// Save video info in DB
-		if err = videoService.CreateVideo(newVideo); err != nil {
-			log.Fatalf("Error creating video: %v", err)
-			continue
-		}
+		//if err = videoService.SaveVideo(newVideo); err != nil {//TODO temp
+		//	log.Fatalf("Error saving video in DB: %v", err)
+		//	continue
+		//}
 
 		newVideo.Content = content
 
@@ -313,7 +314,8 @@ func createVideosFromDescriptions(
 	}
 }
 
-func uploadVideos(videoUploader *uploader.VideoUploader, processedVideos []*entities.Video) {
+func uploadVideos(uploader *uploader.VideoUploader, processedVideos []*entities.Video) {
+
 	var wg sync.WaitGroup
 	for _, newVideo := range processedVideos {
 		wg.Add(1)
@@ -323,11 +325,11 @@ func uploadVideos(videoUploader *uploader.VideoUploader, processedVideos []*enti
 			hashtags := video.Tags
 
 			// Upload video to YouTube
-			if err := videoUploader.UploadVideoToYouTube(video, description, hashtags); err != nil {
+			if err := uploader.UploadToYouTube(video, description, hashtags); err != nil {
 				log.Printf("Error uploading video to YouTube: %v", err)
 			}
 
-			// Upload video to TikTok
+			//todo Upload video to TikTok
 			//if err := videoUploader.UploadVideoToTikTok(video, description, hashtags); err != nil {
 			//	log.Printf("Error uploading video to TikTok: %v", err)
 			//}

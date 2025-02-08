@@ -7,6 +7,7 @@ import (
 
 	"canty/config"
 	"canty/internal/core/entities"
+
 	"golang.org/x/net/context"
 	"google.golang.org/api/option"
 	youtube "google.golang.org/api/youtube/v3"
@@ -49,7 +50,7 @@ func initializeYouTubeClients(accounts []config.AccountConfig) []*youtube.Servic
 //return tkClients
 //}
 
-func (vu *VideoUploader) UploadVideoToYouTube(newVideo *entities.Video, description string, hashtags []string) error {
+func (vu *VideoUploader) UploadToYouTube(newVideo *entities.Video, description string, hashtags []string) error {
 	for _, ytClient := range vu.YtClients {
 		err := vu.uploadToYouTube(ytClient, newVideo, description, hashtags)
 		if err != nil {

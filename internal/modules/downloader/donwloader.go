@@ -2,9 +2,8 @@ package downloader
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"os/exec"
-	"path/filepath"
 
 	"canty/internal/core/entities"
 )
@@ -38,21 +37,31 @@ func (vd *VideoDownloader) DownloadVideo(platform, url string, outputPath string
 	}
 }
 
-func (vd *VideoDownloader) downloadYouTubeVideo(url string, outputPath string) (entities.Video, error) {
-	fileName := filepath.Join(url, "video.mp4")
-	cmd := exec.Command("youtube-dl", "-o", fileName, url)
-	if err := cmd.Run(); err != nil {
-		return entities.Video{}, fmt.Errorf("failed to download video: %w", err)
+func (vd *VideoDownloader) downloadYouTubeVideo(videoURL string, outputPath string) (entities.Video, error) {
+	// Создаем временный файл для скачивания видео.
+	tmpFile, err := os.CreateTemp("", "video-*.mp4")
+	if err != nil {
+		return entities.Video{}, fmt.Errorf("не удалось создать временный файл: %w", err)
+	}
+	fileName := tmpFile.Name()
+	// Закрываем файл, так как youtube-dl перезапишет его.
+	tmpFile.Close()
+
+	// Выполняем команду youtube-dl для скачивания видео.
+	cmd := exec.Command("youtube-dl", "-o", fileName, videoURL)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return entities.Video{}, fmt.Errorf("не удалось скачать видео: %w, вывод: %s", err, output)
 	}
 
-	// Чтение содержимого файла как []byte
-	videoBytes, err := ioutil.ReadFile(fileName)
+	// Читаем содержимое файла в []byte.
+	videoBytes, err := os.ReadFile(fileName)
 	if err != nil {
-		return entities.Video{}, fmt.Errorf("failed to read video file: %w", err)
+		return entities.Video{}, fmt.Errorf("не удалось прочитать видеофайл: %w", err)
 	}
 
 	video := entities.Video{
-		URL:      url,
+		URL:      videoURL,
 		Content:  videoBytes,
 		FilePath: fileName,
 	}

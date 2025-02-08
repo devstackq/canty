@@ -10,7 +10,7 @@ func NewVideoService(repo entities.VideoRepository) *VideoService {
 	return &VideoService{repo: repo}
 }
 
-func (s *VideoService) CreateVideo(video *entities.Video) error {
+func (s *VideoService) SaveVideo(video *entities.Video) error {
 	return s.repo.Create(video)
 }
 
