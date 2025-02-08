@@ -180,7 +180,7 @@ func analyzeAndProcessVideos(wg *sync.WaitGroup, platform string, params *videoP
 
 		// Генерация аудио
 		audioText := "This is a generated audio description."
-		audioFile, err := params.audioGenerator.GenerateAudio(audioText, params.config.App.OutputPath+"/audio.mp3")
+		audioFile, err := params.audioGenerator.GenerateAudio(context.Background(), audioText, params.config.App.OutputPath+"/audio.mp3")
 		if err != nil {
 			log.Printf("Error generating audio for user %s: %v", username, err)
 			continue

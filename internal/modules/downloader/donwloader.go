@@ -38,7 +38,6 @@ func (vd *VideoDownloader) DownloadVideo(platform, url string, outputPath string
 }
 
 func (vd *VideoDownloader) downloadYouTubeVideo(videoURL string, outputPath string) (entities.Video, error) {
-	os.Setenv("PATH", "/opt/homebrew/bin:"+os.Getenv("PATH")) //todo need?
 
 	// Создаем временный файл для скачивания видео.
 	tmpFile, err := os.CreateTemp("", "video-*.mp4")
@@ -50,25 +49,19 @@ func (vd *VideoDownloader) downloadYouTubeVideo(videoURL string, outputPath stri
 	tmpFile.Close()
 
 	// Выполняем команду youtube-dl для скачивания видео.
-	cmd := exec.Command("/opt/homebrew/bin/yt-dlp", "-o", fileName, videoURL)
+	cmd := exec.Command("python3", "/usr/local/bin/yt-dlp", "-o", fileName, videoURL)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return entities.Video{}, fmt.Errorf("не удалось скачать видео: %w, вывод: %s", err, output)
 	}
 
-	// Читаем содержимое файла в []byte.
-	videoBytes, err := os.ReadFile(fileName)
-	if err != nil {
-		return entities.Video{}, fmt.Errorf("не удалось прочитать видеофайл: %w", err)
-	}
-
 	video := entities.Video{
 		URL:      videoURL,
-		Content:  videoBytes,
+		Content:  output,
 		FilePath: fileName,
 	}
 
-	fmt.Printf("downloadYouTubeVideo video: %+v", video)
+	fmt.Printf("downloadYouTubeVideo video: %+v \n", output)
 
 	return video, nil
 }
