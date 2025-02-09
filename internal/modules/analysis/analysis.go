@@ -167,10 +167,10 @@ func (vas *VideoAnalysisService) getPopularYouTubeVideos() (map[string][]entitie
 
 		// Собираем объект Video с тегами и субтитрами
 		video := entities.Video{
-			Title:       videoDetails.Snippet.Title,       // можно дополнительно генерировать новый заголовок
-			Description: videoDetails.Snippet.Description, // можно дополнительно генерировать новое описание
+			Title:       videoDetails.Snippet.Title,       // todo gen new Title? by Gpt
+			Description: videoDetails.Snippet.Description, // todo gen new Description? by GTP
 			URL:         videoURL,
-			Tags:        videoDetails.Snippet.Tags, // теги из подробной информации
+			Tags:        videoDetails.Snippet.Tags,
 			Subtitles:   subtitles,
 		}
 

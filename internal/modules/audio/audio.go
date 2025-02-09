@@ -15,10 +15,9 @@ type AudioGenerator struct {
 }
 
 // NewAudioGenerator создаёт экземпляр AudioGenerator.
-// Если потребуется, вместо option.WithoutAuthentication() можно использовать
-// другие методы аутентификации (например, option.WithCredentialsFile).
 func NewAudioGenerator(ctx context.Context) (*AudioGenerator, error) {
-	client, err := texttospeech.NewClient(ctx, option.WithoutAuthentication())
+
+	client, err := texttospeech.NewClient(ctx, option.WithCredentialsFile("config/g_config.json"))
 	if err != nil {
 		return nil, err
 	}
