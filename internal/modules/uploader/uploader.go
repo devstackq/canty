@@ -2,12 +2,14 @@ package uploader
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
 	"canty/config"
 	"canty/internal/core/entities"
 
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 	youtube "google.golang.org/api/youtube/v3"
 )
@@ -19,30 +21,57 @@ type VideoUploader struct {
 }
 
 // NewVideoUploader создает VideoUploader и инициализирует YouTube клиентов
-func NewVideoUploader(cfg config.Config) *VideoUploader {
-	ctx := context.Background()
-	return &VideoUploader{
-		YClients: initializeYouTubeClients(ctx, cfg.Youtube.Accounts),
-		// TClients: initializeTikTokClients(cfg.TikTok.Accounts),
+func NewVideoUploader(ctx context.Context, cfg config.Config) (*VideoUploader, error) {
+	ytClients, err := initializeYouTubeClients(ctx, cfg.YtAccounts)
+	if err != nil {
+		return nil, err
 	}
+
+	return &VideoUploader{
+		YClients: ytClients,
+		// TClients: initializeTikTokClients(cfg.TikTok.Accounts),
+	}, nil
 }
 
 // initializeYouTubeClients создает клиентов для каждого аккаунта на YouTube
-func initializeYouTubeClients(ctx context.Context, accounts []config.AccountConfig) map[string]*entities.YClient {
+func initializeYouTubeClients(ctx context.Context, accounts []config.YouTubeAccount) (map[string]*entities.YClient, error) {
 	yClients := make(map[string]*entities.YClient, len(accounts))
-	for _, account := range accounts {
-		client, err := youtube.NewService(ctx, option.WithAPIKey(account.ApiKey))
-		if err != nil {
-			log.Printf("Error creating YouTube service for %s: %v", account.Username, err)
-			continue
-		}
-		yClients[account.Username] = &entities.YClient{
-			Client:   client,
-			Category: account.Category,
-			UserName: account.Username,
+	for _, ytAccount := range accounts {
+		if ytAccount.Credentials != nil {
+			// Формируем JSON-данные из полей credentials
+			credsData := map[string]interface{}{
+				"installed": map[string]interface{}{
+					"client_id":                   ytAccount.Credentials.Installed.ClientID,
+					"project_id":                  ytAccount.Credentials.Installed.ProjectID,
+					"auth_uri":                    ytAccount.Credentials.Installed.AuthURI,
+					"token_uri":                   ytAccount.Credentials.Installed.TokenURI,
+					"auth_provider_x509_cert_url": ytAccount.Credentials.Installed.AuthProviderCertURL,
+					"client_secret":               ytAccount.Credentials.Installed.ClientSecret,
+					"redirect_uris":               ytAccount.Credentials.Installed.RedirectURIs,
+				},
+			}
+			jsonBytes, err := json.Marshal(credsData)
+			if err != nil {
+				return nil, err
+			}
+			creds, err := google.CredentialsFromJSON(ctx, jsonBytes, youtube.YoutubeForceSslScope)
+			if err != nil {
+				return nil, err
+			}
+			client, err := youtube.NewService(ctx, option.WithCredentials(creds))
+			if err != nil {
+				return nil, err
+			}
+
+			yClients[ytAccount.Username] = &entities.YClient{
+				Client:   client,
+				Category: ytAccount.Category,
+				UserName: ytAccount.Username,
+			}
 		}
 	}
-	return yClients
+
+	return yClients, nil
 }
 
 // UploadToYouTube – метод высокого уровня, который для каждого нужного пользователя вызывает загрузку видео

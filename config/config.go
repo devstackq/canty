@@ -2,7 +2,7 @@ package config
 
 type Config struct {
 	App        AppConfig        `yaml:"app"`
-	Youtube    PlatformConfig   `yaml:"youtube"`
+	YtAccounts []YouTubeAccount `yaml:"yt_accounts"`
 	Tiktok     PlatformConfig   `yaml:"tiktok"`
 	Monitoring MonitoringConfig `yaml:"monitoring"`
 	DBConfig   DBConfig         `yaml:"databases"`
@@ -26,6 +26,27 @@ type AppConfig struct {
 
 type PlatformConfig struct {
 	Accounts []AccountConfig `yaml:"accounts"`
+}
+
+type YouTubeAccount struct {
+	ApiKey      string       `yaml:"apiKey"`
+	Username    string       `yaml:"username"`
+	Category    string       `yaml:"category"`
+	Credentials *Credentials `yaml:"credentials,omitempty"`
+}
+
+type Credentials struct {
+	Installed InstalledCredentials `yaml:"installed"`
+}
+
+type InstalledCredentials struct {
+	ClientID            string   `yaml:"client_id"`
+	ProjectID           string   `yaml:"project_id"`
+	AuthURI             string   `yaml:"auth_uri"`
+	TokenURI            string   `yaml:"token_uri"`
+	AuthProviderCertURL string   `yaml:"auth_provider_x509_cert_url"`
+	ClientSecret        string   `yaml:"client_secret"`
+	RedirectURIs        []string `yaml:"redirect_uris"`
 }
 
 type AccountConfig struct {

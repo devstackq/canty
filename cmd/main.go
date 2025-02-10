@@ -57,7 +57,7 @@ func main() {
 	if err = yaml.Unmarshal(data, &cfg); err != nil {
 		log.Fatalf("Ошибка парсинга YAML: %v", err)
 	}
-	fmt.Printf("config: %+v\n", cfg)
+	fmt.Printf("config: %+v\n", cfg.YtAccounts[0].Credentials)
 
 	//// Инициализация базы данных через фабрику
 	//dbFactory := &databases.DatabaseFactory{}
@@ -84,8 +84,7 @@ func main() {
 	//	if err != nil {
 	//		log.Fatalf("Error connecting to PostgreSQL: %v", err)
 	//	}
-	//	// TODO: Реализуйте подключение к PostgreSQL
-	//	videoRepo = postgresql.NewPostgresVideoRepository(nil)
+	//	videoRepo = postgresql.NewPostgresVideoRepository(nil)//todo
 	//default:
 	//	log.Fatalf("Unsupported database type for repositories: %+v", cfg.DBConfig)
 	//}
@@ -93,8 +92,12 @@ func main() {
 
 	// Инициализация сервисов и модулей
 	videoService := services.NewVideoService(nil)
-	videoUploader := uploader.NewVideoUploader(cfg) // внутри него создаются YClients по AccountConfig
-	videoAnalysisService := analysis.NewVideoAnalysisService(videoUploader.YClients, cfg)
+	videoUploader, err := uploader.NewVideoUploader(ctx, cfg) // внутри него создаются YClients по AccountConfig
+	if err != nil {
+		log.Fatalf("Error initialazing videoUploader: %v", err)
+	}
+
+	videoAnalysisService := analysis.NewVideoAnalysisService(videoUploader.YClients, cfg) // future receive -> tiktok,etc
 	videoDownloader := downloader.VideoDownloader{}
 	videoProcessor := processor.VideoProcessor{}
 	audioGenerator, err := audio.NewAudioGenerator(ctx)

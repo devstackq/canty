@@ -3,4 +3,6 @@
 
 TODO: CRON, logger?, Solidity - Payment?
 TODO2: разные темы для аккаунто, новые платформы подклчдить, настройка - акканутов - для монетизации
-asd
+
+mb use seconde - client APIKEY?
+remove 2 commit - googleAUTH creds

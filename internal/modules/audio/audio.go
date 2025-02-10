@@ -16,7 +16,6 @@ type AudioGenerator struct {
 
 // NewAudioGenerator создаёт экземпляр AudioGenerator.
 func NewAudioGenerator(ctx context.Context) (*AudioGenerator, error) {
-
 	client, err := texttospeech.NewClient(ctx, option.WithCredentialsFile("config/g_config.json"))
 	if err != nil {
 		return nil, err

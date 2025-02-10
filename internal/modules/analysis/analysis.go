@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,18 +20,16 @@ const (
 
 // VideoAnalysisService осуществляет анализ видео для различных платформ.
 type VideoAnalysisService struct {
-	ytClients []entities.YClient
-	// TODO: Добавить поддержку TikTok, например: tkClients *api.TikTokClient
+	ytClients []*entities.YClient
+	// TODO: tik tok
 }
 
-// NewVideoAnalysisService создает новый экземпляр VideoAnalysisService.
-// При этом формируется срез YouTube-клиентов (YClients) на основе AccountConfig,
-// используя переданный мапу клиентов, где ключ – username.
 func NewVideoAnalysisService(ytClients map[string]*entities.YClient, cfg config.Config) *VideoAnalysisService {
-	clients := make([]entities.YClient, 0, len(cfg.Youtube.Accounts))
-	for _, account := range cfg.Youtube.Accounts {
+	clients := make([]*entities.YClient, 0, len(cfg.YtAccounts))
+
+	for _, account := range cfg.YtAccounts {
 		if cl, ok := ytClients[account.Username]; ok {
-			clients = append(clients, entities.YClient{
+			clients = append(clients, &entities.YClient{
 				// Если в мапе хранится готовый клиент, можно использовать его напрямую:
 				Client:   cl.Client,
 				Category: account.Category,
@@ -38,6 +37,7 @@ func NewVideoAnalysisService(ytClients map[string]*entities.YClient, cfg config.
 			})
 		}
 	}
+
 	return &VideoAnalysisService{
 		ytClients: clients,
 	}
@@ -85,21 +85,27 @@ func (vas *VideoAnalysisService) getPopularYouTubeVideos() (map[string][]entitie
 
 	// Обходим всех клиентов
 	for _, ytClient := range vas.ytClients {
+		if ytClient.Client == nil {
+			log.Printf("ytClient.Client is nil for user %s", ytClient.UserName)
+			continue
+		}
+
 		// 1. Выполняем запрос поиска видео за последние 7 дней по заданной категории
 		searchCall := ytClient.Client.Search.List([]string{"snippet"}).
-			RegionCode("US"). // можно вынести в конфигурацию
+			RegionCode("US"). // get from config
 			PublishedAfter(time.Now().Add(-7 * 24 * time.Hour).Format(time.RFC3339)).
 			VideoCategoryId(ytClient.Category).
 			Type("video").
-			MaxResults(1)
+			Q("a").
+			MaxResults(1) // get from config
+
 		searchResponse, err := searchCall.Do()
 		if err != nil {
-			log.Printf("Ошибка при вызове Search.list для пользователя %s: %v", ytClient.UserName, err)
-			continue
+			return nil, err
 		}
+
 		if len(searchResponse.Items) == 0 {
-			log.Printf("Нет видео для пользователя %s", ytClient.UserName)
-			continue
+			return nil, err
 		}
 
 		var videos = make([]entities.Video, 0, len(searchResponse.Items)) //todo - now we get 1 video
@@ -112,13 +118,12 @@ func (vas *VideoAnalysisService) getPopularYouTubeVideos() (map[string][]entitie
 		videosCall := ytClient.Client.Videos.List([]string{"snippet"}).Id(videoID)
 		videosResponse, err := videosCall.Do()
 		if err != nil {
-			log.Printf("Ошибка при вызове Videos.list для видео %s: %v", videoID, err)
-			continue
+			return nil, err
 		}
 		if len(videosResponse.Items) == 0 {
-			log.Printf("Нет подробной информации для видео %s", videoID)
-			continue
+			return nil, errors.New("no videos found")
 		}
+
 		videoDetails := videosResponse.Items[0]
 
 		// 3. Пытаемся получить субтитры для видео через Captions.list
@@ -126,8 +131,7 @@ func (vas *VideoAnalysisService) getPopularYouTubeVideos() (map[string][]entitie
 		captionsCall := ytClient.Client.Captions.List([]string{"snippet"}, videoID)
 		captionsResponse, err := captionsCall.Do()
 		if err != nil {
-			log.Printf("Ошибка запроса субтитров для видео %s: %v", videoID, err)
-			continue
+			return nil, err
 		}
 
 		if len(captionsResponse.Items) > 0 {
@@ -148,15 +152,14 @@ func (vas *VideoAnalysisService) getPopularYouTubeVideos() (map[string][]entitie
 			downloadCall := ytClient.Client.Captions.Download(chosenCaption.Id).Tfmt("srt")
 			resp, err := downloadCall.Download()
 			if err != nil {
-				log.Printf("Ошибка загрузки субтитров для caption %s: %v", chosenCaption.Id, err)
+				return nil, err
 				continue
 			}
 			defer resp.Body.Close()
 
 			data, err := io.ReadAll(resp.Body)
 			if err != nil {
-				log.Printf("Ошибка чтения субтитров для caption %s: %v", chosenCaption.Id, err)
-				continue
+				return nil, err
 			}
 
 			subtitles = string(data)
